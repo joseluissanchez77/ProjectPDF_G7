@@ -1,0 +1,9 @@
+{
+    "tipo_paciente": [
+        "ADULTO",
+        "PMENOR"
+    ],
+    "tipo_documento":[
+        "C","P"
+    ]
+}
