@@ -3,7 +3,43 @@
         "ADULTO",
         "PMENOR"
     ],
-    "tipo_documento":[
-        "C","P"
-    ]
+    "tipo_documento": [
+        "C",
+        "P"
+    ],
+    "feriados": [
+        "08-10",
+        "11-03"
+    ],
+    "tipo_medico": [
+        "GENERAL",
+        "ESPECIALISTA"
+    ],
+   "especialidad": [
+        "TRAUMATOLOGIA",
+        "OTORRINOLOGIA",
+        "GINECOLOGIA"
+    ],
+    "horarios": {
+        "LUNES": [
+            "08:00",
+            "19:00"
+        ],
+        "MARTES": [
+            "08:00",
+            "19:00"
+        ],
+        "MIERCOLES": [
+            "08:00",
+            "19:00"
+        ],
+        "JUEVES": [
+            "08:00",
+            "19:00"
+        ],
+        "VIERNES": [
+            "07:00",
+            "16:00"
+        ]
+    }
 }
