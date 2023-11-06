@@ -7,10 +7,16 @@ import org.citas_medidas.entidades.*;
 import org.citas_medidas.excepciones.MensageErrorException;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.TextStyle;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -22,7 +28,6 @@ public class Main {
         List<Horarios> horariosList = new ArrayList<>();
 
         try {
-
             // El valor de nombreProyecto contendrá la ruta completa del proyecto
             String nombreProyecto = new File("").getAbsolutePath();
             String rutaRelativaProyecto = nombreProyecto.replace("\\", "/");
@@ -48,8 +53,8 @@ public class Main {
             // Lee el archivo JSON y lo convierte en un árbol JSON
             JsonNode contenidoDicc = objectMapper.readTree(contenidoComoString);
 
-            //========================================================
-            //leer y asignar el tipo de paciente al objeto
+            // ========================================================
+            // leer y asignar el tipo de paciente al objeto
             ArrayNode tipoPacienteNode = (ArrayNode) contenidoDicc.get("tipo_paciente");
 
             if (tipoPacienteNode == null)
@@ -70,8 +75,8 @@ public class Main {
                 }
             }
 
-            //---------------------------------------------------------
-            //leer y asignar el tipo de documento al objeto
+            // ---------------------------------------------------------
+            // leer y asignar el tipo de documento al objeto
             ArrayNode tipoDocumentoNode = (ArrayNode) contenidoDicc.get("tipo_documento");
 
             if (tipoDocumentoNode == null)
@@ -92,7 +97,7 @@ public class Main {
                 }
             }
 
-            //leer y asignar feriado al objeto
+            // leer y asignar feriado al objeto
             ArrayNode feriadosNode = (ArrayNode) contenidoDicc.get("feriados");
 
             if (feriadosNode == null)
@@ -101,12 +106,12 @@ public class Main {
             Feriados feriadosObj = new Feriados();
             feriadosObj.setFecha_feriado(feriadosNode);
 
-            List<String> feriadoList = feriadosObj.getFecha_feriado();
-            for (String valor : feriadoList) {
-                System.out.println("Feriado "+valor);
-            }
+            // List<String> feriadoList = feriadosObj.getFecha_feriado();
+            // for (String valor : feriadoList) {
+            // System.out.println("Feriado "+valor);
+            // }
 
-            //leer y asignar el tipo de medico
+            // leer y asignar el tipo de medico
             ArrayNode tipoMedicoNode = (ArrayNode) contenidoDicc.get("tipo_medico");
 
             if (tipoMedicoNode == null)
@@ -129,8 +134,7 @@ public class Main {
                 }
             }
 
-
-            //leer y asignar la espacialidad
+            // leer y asignar la espacialidad
             ArrayNode especialidadNode = (ArrayNode) contenidoDicc.get("especialidad");
 
             if (especialidadNode == null)
@@ -140,11 +144,11 @@ public class Main {
             especialidadObj.setEspecialidad(especialidadNode);
 
             List<String> especialidadList = especialidadObj.getEspecialidad();
-            for (String valor : especialidadList) {
-                System.out.println("Espacialidad:  "+valor);
-            }
+            // for (String valor : especialidadList) {
+            // System.out.println("Espacialidad: "+valor);
+            // }
 
-            //leer y asignar horarios
+            // leer y asignar horarios
             // Accede a los datos del archivo JSON según su estructura
             JsonNode horariosNode = contenidoDicc.get("horarios");
 
@@ -163,18 +167,277 @@ public class Main {
                 horariosList.add(horario);
 
             }
-            //=====================================================================0
-            System.out.println(tipoPacienteObj.getAdulto());
-            System.out.println(tipoDocumentoObj.getCedula());
-            System.out.println(tipoMedicoObj.getEspecialista());
-            for (Horarios horario : horariosList) {
-                System.out.println("Día: " + horario.getDia());
-                System.out.println("Horario de inicio: " + horario.getHora_incio());
-                System.out.println("Horario de fin: " + horario.getHora_fin());
-            }
-
+            // =====================================================================0
+            // System.out.println(tipoPacienteObj.getAdulto());
+            // System.out.println(tipoDocumentoObj.getCedula());
+            // System.out.println(tipoMedicoObj.getEspecialista());
+            // for (Horarios horario : horariosList) {
+            // System.out.println("Día: " + horario.getDia());
+            // System.out.println("Horario de inicio: " + horario.getHora_incio());
+            // System.out.println("Horario de fin: " + horario.getHora_fin());
+            // }
 
             System.out.println("====COMIENZA A LEER EL TXT====");
+
+            // El valor de nombreProyecto contendrá la ruta completa del proyecto
+            String rutaInputMed = rutaRelativaProyecto
+                    + "/src/main/java/org/citas_medidas/input/med_input.txt";
+
+            File archivoMedInput = new File(rutaInputMed);
+
+            if (!archivoMedInput.exists())
+                MensageErrorException.detenerEjecucion("El archivo [med_input.txt] no existe");
+
+            List<Cita> citas = new ArrayList<>();
+            List<String> citasNoCumplenRequerimientos = new ArrayList<>();
+            Cita citaActual = new Cita();
+
+            // StringBuilder contenido = new StringBuilder();
+            BufferedReader lectorInputMed = new BufferedReader(new FileReader(rutaInputMed));
+            String citaLinea;
+
+            String fecha_actual = null;
+
+            boolean nueva_cita = false;
+            // Obtener los feriados
+            List<String> feriadoList = feriadosObj.getFecha_feriado();
+            String fecha_cita = null;
+            while ((citaLinea = lectorInputMed.readLine()) != null) {
+
+                String[] parte = citaLinea.split("\\|");
+
+                nueva_cita = citaLinea.trim().equals("NUEVA CITA") || nueva_cita == true ? true : false;
+
+                // registar las citas que ya estan agendadas al objeto
+                if (!(citaLinea == null) && !(citaLinea.isEmpty()) && nueva_cita == false) {
+                    if (parte.length == 1)
+                        fecha_cita = parte[0];
+                    if (parte.length >= 9) {
+                        citaActual.setFecha(fecha_cita);
+                        citaActual.setHora(parte[0]);
+                        citaActual.setTipo_cita(parte[1]);
+                        citaActual.setEspecialidad(parte[2]);
+                        citaActual.setPaciente(parte[3]);
+                        citaActual.setTipo_paciente(parte[4]);
+                        citaActual.setTipo_documento(parte[5]);
+                        citaActual.setDocumento(parte[6]);
+                        citaActual.setTelefono(parte[7]);
+                        citaActual.setFecha_nacimiento(parte[8]);
+
+                        if (parte.length > 10) {
+                            citaActual.setObservaciones(parte[9]);
+                            citaActual.setResponsable(parte[10]);
+                            citaActual.setTipo_documento_responsable(parte[11]);
+                            citaActual.setDocumento_responsable(parte[12]);
+                            citaActual.setFecha_nacimiento_responsable(parte[13]);
+                        }
+
+                        // Asegúrate de agregar la última cita después del bucle
+                        if (citaActual != null) {
+                            citas.add(citaActual);
+                        }
+                        citaActual = new Cita();
+                    }
+                }
+
+                // La cadena no está vacía CITAS NUEVAS ***
+                if (!(citaLinea == null) && !(citaLinea.isEmpty()) && nueva_cita) {
+
+                    // validar que la fecha sea valida y sea diferente q la actual
+                    if (esFechaValida(citaLinea, "yyyy-MM-dd") && fecha_actual != citaLinea) {
+                        fecha_actual = citaLinea;
+                    }
+
+                    if (citaLinea.trim().equals("NUEVA CITA")) {
+                        fecha_actual = "";
+                    }
+                    //validar el horario de atencion
+                    Boolean validarFecha = esFechaValida(parte[0], "yyyy-MM-dd");
+                    String fecha_atc = validarFecha ? parte[0] : fecha_actual;
+
+                    //Los días feriados no hay atención de ningún servicio.
+                    boolean validateFechaFeriado = validateFechaFeriado(fecha_atc, feriadoList);
+
+                    String hora_cita = "";
+                    boolean validarHorariosConsultaMedica = false;
+                    if (parte.length >= 9) {
+                        hora_cita = !validarFecha ? parte[0] : parte[1];
+                        validarHorariosConsultaMedica = validarHorariosConsultaMedica(fecha_atc, hora_cita,
+                                horariosList);
+                    }
+
+                    //validar que Solo se pueden registrar citas en el futuro.
+                    boolean validarRegistroCitasSoloFuturo = validarRegistroCitasSoloFuturo(obtenerFechaActual(),obtenerHoraActual(),fecha_atc,hora_cita);
+
+                    //Un paciente no puede tener citas simultáneas ni en el mismo servicio ni en distintos servicios
+                    boolean validarCitasSimultaneasServicios = false;
+//                    String tipo_cita = "";
+//                    String espacialidad = "";
+//                    String doc_idententificacion= "";
+//                    if (parte.length >= 9) {
+//
+//                        tipo_cita = !validarFecha ? parte[1] : parte[2];
+//                        espacialidad = !validarFecha ? parte[2] : parte[3];
+//                        doc_idententificacion = !validarFecha ? parte[6] : parte[7];
+//                        //si retorna FALSE no existe   TRUE ya existe
+//                        validarCitasSimultaneasServicios = validarCitasSimultaneasServicios(fecha_atc, hora_cita, tipo_cita, espacialidad, doc_idententificacion,citas);
+//
+//                    }
+
+
+                    //System.out.println(validateFechaFeriado+ " "+validarHorariosConsultaMedica+ " "+validarRegistroCitasSoloFuturo+ " "+validarCitasSimultaneasServicios);
+                    if (parte.length >= 9 && validateFechaFeriado == false && validarHorariosConsultaMedica && validarRegistroCitasSoloFuturo && validarCitasSimultaneasServicios == false) {
+
+                        //System.out.println(doc_idententificacion);
+                        String paciente = !validarFecha ? parte[3] : parte[4];
+                        String tipo_paciente = !validarFecha ? parte[4] : parte[5];
+
+
+                        citaActual.setFecha(fecha_atc);
+                        citaActual.setHora(hora_cita);
+                        citaActual.setTipo_cita(tipo_cita);
+                        citaActual.setEspecialidad(espacialidad);
+                        citaActual.setPaciente(paciente);
+                        citaActual.setTipo_paciente(tipo_paciente);
+                        citaActual.setTipo_documento(!validarFecha ? parte[5] : parte[6]);
+                        citaActual.setDocumento(doc_idententificacion);
+                        citaActual.setTelefono(!validarFecha ? parte[7] : parte[8]);
+                        citaActual.setFecha_nacimiento(!validarFecha ? parte[8] : parte[9]);
+
+                        if (parte.length > 10) {
+                            citaActual.setObservaciones(!validarFecha ? parte[9] : parte[10]);
+                            citaActual.setResponsable(!validarFecha ? parte[10] : parte[11]);
+                            citaActual.setTipo_documento_responsable(!validarFecha ? parte[11] : parte[12]);
+                            citaActual.setDocumento_responsable(!validarFecha ? parte[12] : parte[13]);
+                            citaActual.setFecha_nacimiento_responsable(!validarFecha ? parte[13] : parte[14]);
+                        }
+
+                        // Asegúrate de agregar la última cita después del bucle
+                        if (citaActual != null) {
+                            citas.add(citaActual);
+                        }
+                        citaActual = new Cita();
+                    }
+                    // todo lo q no cumple con las condiciones
+                    if (parte.length >= 9) {
+                        //Los días feriados no hay atención de ningún servicio.
+                        //Las consultas médicas tienen los siguientes horarios
+                        //Solo se pueden registrar citas en el futuro. validado con la fecha y hora actual
+                        if (validateFechaFeriado || !validarHorariosConsultaMedica || !validarRegistroCitasSoloFuturo || validarCitasSimultaneasServicios)
+                            citasNoCumplenRequerimientos.add(citaLinea);
+
+                        citaActual = new Cita();
+                    }
+
+                }
+
+                //// contenido.append(linea);
+                // if (citaLinea.startsWith("NUEVA CITA")) {
+                // if (citaActual != null) {
+                // citas.add(citaActual);
+                // }
+                // citaActual = new Cita();
+                // } else if (citaActual != null && !citaLinea.isEmpty()) {
+                // String[] parts = citaLinea.split("\\|");
+                // if (parts.length >= 9) {
+                // citaActual.setFecha(parts[0]);
+                // citaActual.setHora(parts[1]);
+                // citaActual.setTipo_cita(parts[2]);
+                // citaActual.setEspecialidad(parts[3]);
+                // citaActual.setPaciente(parts[4]);
+                // citaActual.setTipo_paciente(parts[5]);
+                // citaActual.setTipo_documento(parts[6]);
+                // citaActual.setDocumento(parts[7]);
+                // citaActual.setTelefono(parts[8]);
+                // citaActual.setFecha_nacimiento(parts[9]);
+                //
+                // if (parts.length > 10) {
+                // citaActual.setObservaciones(parts[10]);
+                // citaActual.setResponsable(parts[11]);
+                // citaActual.setTipo_documento_responsable(parts[12]);
+                // citaActual.setDocumento_responsable(parts[13]);
+                // citaActual.setFecha_nacimiento_responsable(parts[14]);
+                // }
+                // }
+                // }
+                //
+
+            }
+
+            lectorInputMed.close();
+
+            // Ahora tienes una lista de objetos Cita
+            int i = 1;
+            System.out.println("=== CITAS APROBADAS ===");
+            for (Cita cita : citas) {
+                StringBuilder sb = new StringBuilder();
+                sb.append(i++);
+                sb.append("|");
+                sb.append(cita.getFecha());
+                sb.append("|");
+                sb.append(cita.getHora());
+                sb.append("|");
+                sb.append(cita.getTipo_cita());
+                sb.append("|");
+                sb.append(cita.getEspecialidad());
+                sb.append("|");
+                sb.append(cita.getPaciente());
+                sb.append("|");
+                sb.append(cita.getTipo_paciente());
+                sb.append("|");
+                sb.append(cita.getTipo_documento());
+                sb.append("|");
+                sb.append(cita.getDocumento());
+                sb.append("|");
+                sb.append(cita.getTelefono());
+                sb.append("|");
+                sb.append(cita.getFecha_nacimiento());
+                sb.append("|");
+                if (cita.getObservaciones() != null) {
+                    sb.append(cita.getObservaciones());
+                    sb.append("|");
+                    sb.append(cita.getResponsable());
+                    sb.append("|");
+                    sb.append(cita.getTipo_documento_responsable());
+                    sb.append("|");
+                    sb.append(cita.getDocumento_responsable());
+                    sb.append("|");
+                    sb.append(cita.getFecha_nacimiento_responsable());
+                }
+
+                String resultado = sb.toString();
+                System.out.println(resultado);
+
+                // System.out.println("Cita:"+ i++);
+                // System.out.println("Fecha: " + cita.getFecha());
+                // System.out.println("Hora: " + cita.getHora());
+                // System.out.println("Tipo de Cita: " + cita.getTipo_cita());
+                // System.out.println("Especialidad: " + cita.getEspecialidad());
+                // System.out.println("Paciente: " + cita.getPaciente());
+                // System.out.println("Tipo de Paciente: " + cita.getTipo_paciente());
+                // System.out.println("Tipo de Documento: " + cita.getTipo_documento());
+                // System.out.println("Documento: " + cita.getDocumento());
+                // System.out.println("Teléfono: " + cita.getTelefono());
+                // System.out.println("Fecha de Nacimiento: " + cita.getFecha_nacimiento());
+                //
+                // if (cita.getObservaciones() != null) {
+                // System.out.println("Observaciones: " + cita.getObservaciones());
+                // System.out.println("Responsable: " + cita.getResponsable());
+                // System.out.println("Tipo de Documento del Responsable: " +
+                // cita.getTipo_documento_responsable());
+                // System.out.println("Documento del Responsable: " +
+                // cita.getDocumento_responsable());
+                // System.out.println("Fecha de Nacimiento del Responsable: " +
+                // cita.getFecha_nacimiento_responsable());
+                // }
+                //
+                // System.out.println(); // Salto de línea para separar las citas
+            }
+
+            System.out.println("=== CITAS QUE NO CUMPLEN ===");
+            for (String cita : citasNoCumplenRequerimientos) {
+                System.out.println(cita);
+            }
 
         } catch (MensageErrorException e) {
             System.err.println(e.getMessage());
@@ -183,18 +446,131 @@ public class Main {
         }
     }
 
-    public static String extraerDatosDiccionario(String contenido, String clave) {
-        String cadena_buscada = null;
-        String patternString = "\"" + clave + "\": \\[(.*?)\\]";
+    public static boolean esFechaValida(String fecha, String formato) {
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(formato);
+            LocalDate.parse(fecha, formatter);
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
 
-        Pattern pattern = Pattern.compile(patternString);
-        Matcher matcher = pattern.matcher(contenido);
+    public static boolean validateFechaFeriado(String fecha, List<String> feriados) {
+        boolean band = false;// no es feriado
+        if (fecha != null && !fecha.isEmpty()) {
+            String fecha_actual = fecha.split("-")[1] + "-" + fecha.split("-")[2];
 
-        if (matcher.find()) {
-            cadena_buscada = matcher.group(1);
+            for (String valor : feriados) {
+                if (valor.trim().equals(fecha_actual.trim()))
+                    band = true;// Si es feriado
+            }
+        }
+        return band;
+    }
+
+    public static boolean validarHorariosConsultaMedica(String fecha_cita, String horaCita,
+            List<Horarios> horariosList) {
+
+        boolean band = false; // cita fuera de rango
+        // Convertir la hora de la cita en un objeto LocalTime
+        LocalTime horaCitaLocalTime = LocalTime.parse(horaCita);
+
+        // Analizar la fecha
+        LocalDate fecha = LocalDate.parse(fecha_cita);
+        // Obtener el día de la semana
+        DayOfWeek diaSemana = fecha.getDayOfWeek();
+        // Convertir a nombre del día de la semana
+        String nombreDia = diaSemana.getDisplayName(TextStyle.FULL, new Locale("es", "ES"));
+
+        for (Horarios horario : horariosList) {
+
+            // Definir el rango de horas deseado (08:00 a 16:00)
+            LocalTime horaInicio = LocalTime.parse(horario.getHora_incio());
+            LocalTime horaFin = LocalTime.parse(horario.getHora_fin());
+
+            if ((horario.getDia().equals(nombreDia.toUpperCase()))
+                    && (horaCitaLocalTime.equals(horaInicio) || horaCitaLocalTime.isAfter(horaInicio))
+                    && (horaCitaLocalTime.equals(horaFin) || (horaCitaLocalTime.isBefore(horaFin)))) {
+                band = true;// cita en el rango
+            }
+
+        }
+        return band;
+
+    }
+
+    public static String obtenerFechaActual(){
+        // Obtener la fecha actual
+        LocalDate fechaActual = LocalDate.now();
+
+        // Definir el formato
+        DateTimeFormatter formato = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        // Formatear la fecha en el formato deseado
+        String fechaFormateada = fechaActual.format(formato);
+        return fechaFormateada;
+    }
+
+    public  static String obtenerHoraActual(){
+        // Obtener la hora actual
+        LocalTime horaActual = LocalTime.now();
+
+        // Definir el formato
+        DateTimeFormatter formato = DateTimeFormatter.ofPattern("HH:mm");
+
+        // Formatear la hora en el formato deseado
+        String horaFormateada = horaActual.format(formato);
+        return horaFormateada;
+
+    }
+
+    public static Boolean validarRegistroCitasSoloFuturo(String fecha_actual, String hora_actual, String fecha_cita, String hora_cita ){
+        boolean band = false;//la fecha y la hora ya pasaron y no se puede registar
+
+
+        if(!fecha_actual.isEmpty() && !hora_actual.isEmpty() && !fecha_cita.isEmpty() && !hora_cita.isEmpty() ){
+
+
+            LocalDateTime fecha_actual_sistema = LocalDateTime.parse(( fecha_actual.trim()+" "+hora_actual.trim() ), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            LocalDateTime fecha_cita_medica = LocalDateTime.parse(( fecha_cita.trim()+" "+hora_cita.trim() ), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+
+            if (fecha_cita_medica.isEqual(fecha_actual_sistema))
+                band = true;//aun se puede registar
+            if (fecha_cita_medica.isAfter(fecha_actual_sistema))
+                band = true;//aun se puede registar
+
         }
 
-        return cadena_buscada;
-    }
-}
 
+
+        return band;
+    }
+
+    public static Boolean validarCitasSimultaneasServicios(String fecha_cita, String hora_cita, String tipo_medico, String especialista, String identificacion, List<Cita> citas){
+
+        boolean band = true;//SI existen coincidencias
+        for (Cita cita : citas) {
+
+            boolean doc_identificacion = cita.getDocumento().trim().equals(identificacion.trim());
+//            boolean fecha_agendar_cita = cita.getFecha().trim().equals(fecha_cita.trim());
+//            boolean hora_agendar_cita = cita.getHora().trim().equals(hora_cita.trim());
+
+            LocalDateTime fecha_actual_cita = LocalDateTime.parse(( fecha_cita.trim()+" "+hora_cita.trim() ), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            LocalDateTime fecha_agendada = LocalDateTime.parse(( cita.getFecha().trim()+" "+cita.getHora().trim() ), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+
+            boolean tipo_medico_cita = cita.getTipo_cita().trim().equals(tipo_medico.trim());
+            boolean especialista_cita = cita.getEspecialidad().trim().equals(especialista.trim());
+
+
+//            if(doc_identificacion && (fecha_agendar_cita && hora_agendar_cita) && (tipo_medico_cita && especialista_cita))
+            if(!doc_identificacion && !fecha_actual_cita.isEqual(fecha_agendada)) {
+             //   System.out.println("INGRESO");
+                band = false;//NO existen coincidencias
+            }
+        }
+
+        return band;
+    }
+
+}
