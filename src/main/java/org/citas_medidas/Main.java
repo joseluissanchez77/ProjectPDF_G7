@@ -328,11 +328,10 @@ public class Main {
 
                     //La última cita se puede hacer 20 minutos antes de la hora de cierre.
                     //si retorna TRUE se pude agendar si retorna FALSE no
-
                     boolean validarUltimaHoraCita = validarUltimaHoraCita(fecha_hora_cita, horariosList);
 
 
-                    //System.out.println(validateFechaFeriado+ " "+validarHorariosConsultaMedica+ " "+validarRegistroCitasSoloFuturo+ " "+validarCitasSimultaneasServicios + " "+ validarCitasSimultaneasPorProfesional+ " "+ validarCitaEspecialista24hAntes);
+                    //System.out.println(validateFechaFeriado+ " "+validarHorariosConsultaMedica+ " "+validarRegistroCitasSoloFuturo+ " "+validarCitasSimultaneasServicios + " "+ validarCitasSimultaneasPorProfesional+ " "+ validarCitaEspecialista24hAntes + " "+  validarApoderadosPacientes + " "+  validarUltimaHoraCita );
                     if (parte.length >= 9 && validateFechaFeriado == false && validarHorariosConsultaMedica && validarRegistroCitasSoloFuturo && validarCitasSimultaneasServicios == false && validarCitasSimultaneasPorProfesional == false && validarCitaEspecialista24hAntes && validarApoderadosPacientes && validarUltimaHoraCita ) {
 
                         //System.out.println(doc_idententificacion);
@@ -668,7 +667,7 @@ public class Main {
 
 
         int edad_paciente = calcularEdad(fecha_nacimiento_paciente);
-        int edad_apoderado = calcularEdad(fecha_nacimiento_apoderado);
+        int edad_apoderado = fecha_nacimiento_apoderado.isEmpty() ? 0 :  calcularEdad(fecha_nacimiento_apoderado);
 
         if(tipo_paciente.trim().equals(tipo_paciente_obj.getMenor()) && cadena <= 10) band = false;
 
@@ -678,9 +677,13 @@ public class Main {
 
         if(tipo_paciente.trim().equals(tipo_paciente_obj.getAdulto()) && edad_paciente >=18) band = true;
 
-        if(edad_apoderado <=18 && cadena>10) band = false;
+        if(tipo_paciente.trim().equals(tipo_paciente_obj.getAdulto()) && edad_paciente <18) band = false;
 
-        if(edad_apoderado >=18 && cadena>10) band = true;
+        if(tipo_paciente.trim().equals(tipo_paciente_obj.getMenor()) && edad_paciente > 18 ) band = false;
+
+        if(edad_apoderado <=18 && cadena>10) band = false;
+//
+        if(edad_paciente <=18 && edad_apoderado >=18 && cadena>10) band = true;
 
 
         return band;
@@ -715,6 +718,7 @@ public class Main {
                 band = true;// hora de cita fuera de rango
 
         }
+
         return band;
     }
 }
