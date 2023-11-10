@@ -271,22 +271,29 @@ public class Main {
 
                     //Un paciente no puede tener citas simultáneas ni en el mismo servicio ni en distintos servicios
                     boolean validarCitasSimultaneasServicios = false;
-//                    String tipo_cita = "";
-//                    String espacialidad = "";
-//                    String doc_idententificacion= "";
-//                    if (parte.length >= 9) {
-//
-//                        tipo_cita = !validarFecha ? parte[1] : parte[2];
-//                        espacialidad = !validarFecha ? parte[2] : parte[3];
-//                        doc_idententificacion = !validarFecha ? parte[6] : parte[7];
-//                        //si retorna FALSE no existe   TRUE ya existe
-//                        validarCitasSimultaneasServicios = validarCitasSimultaneasServicios(fecha_atc, hora_cita, tipo_cita, espacialidad, doc_idententificacion,citas);
-//
-//                    }
 
+                    String doc_idententificacion= "";
+                    if (parte.length >= 9) {
+                        doc_idententificacion = !validarFecha ? parte[6] : parte[7];
+                        //si retorna FALSE no existe   TRUE ya existe
+                        validarCitasSimultaneasServicios = validarCitasSimultaneasServicios(fecha_atc, hora_cita,doc_idententificacion, citas);
+
+                    }
+
+
+                    //Ningún profesional puede tener citas simultáneas
+                    String tipo_cita = "";
+                    String especialidad = "";
+                    boolean validarCitasSimultaneasPorProfesional = false;
+                    if (parte.length >= 9) {
+                        tipo_cita = !validarFecha ? parte[1] : parte[2];
+                        especialidad = !validarFecha ? parte[2] : parte[3];
+                        //si retorna FALSE se lo pruede agregar   TRUE no se lo peude agregar
+                        validarCitasSimultaneasPorProfesional = validarCitasSimultaneasPorProfesional(fecha_atc, hora_cita,especialidad, doc_idententificacion, citas);
+                    }
 
                     //System.out.println(validateFechaFeriado+ " "+validarHorariosConsultaMedica+ " "+validarRegistroCitasSoloFuturo+ " "+validarCitasSimultaneasServicios);
-                    if (parte.length >= 9 && validateFechaFeriado == false && validarHorariosConsultaMedica && validarRegistroCitasSoloFuturo && validarCitasSimultaneasServicios == false) {
+                    if (parte.length >= 9 && validateFechaFeriado == false && validarHorariosConsultaMedica && validarRegistroCitasSoloFuturo && validarCitasSimultaneasServicios == false && validarCitasSimultaneasPorProfesional == false) {
 
                         //System.out.println(doc_idententificacion);
                         String paciente = !validarFecha ? parte[3] : parte[4];
@@ -296,7 +303,7 @@ public class Main {
                         citaActual.setFecha(fecha_atc);
                         citaActual.setHora(hora_cita);
                         citaActual.setTipo_cita(tipo_cita);
-                        citaActual.setEspecialidad(espacialidad);
+                        citaActual.setEspecialidad(especialidad);
                         citaActual.setPaciente(paciente);
                         citaActual.setTipo_paciente(tipo_paciente);
                         citaActual.setTipo_documento(!validarFecha ? parte[5] : parte[6]);
@@ -323,7 +330,7 @@ public class Main {
                         //Los días feriados no hay atención de ningún servicio.
                         //Las consultas médicas tienen los siguientes horarios
                         //Solo se pueden registrar citas en el futuro. validado con la fecha y hora actual
-                        if (validateFechaFeriado || !validarHorariosConsultaMedica || !validarRegistroCitasSoloFuturo || validarCitasSimultaneasServicios)
+                        if (validateFechaFeriado || !validarHorariosConsultaMedica || !validarRegistroCitasSoloFuturo || validarCitasSimultaneasServicios || validarCitasSimultaneasPorProfesional)
                             citasNoCumplenRequerimientos.add(citaLinea);
 
                         citaActual = new Cita();
@@ -547,28 +554,47 @@ public class Main {
         return band;
     }
 
-    public static Boolean validarCitasSimultaneasServicios(String fecha_cita, String hora_cita, String tipo_medico, String especialista, String identificacion, List<Cita> citas){
+    public static Boolean validarCitasSimultaneasServicios(String fecha_cita, String hora_cita, String identificacion, List<Cita> citas){
 
+        //si retorna FALSE no existe  ; TRUE ya existe
         boolean band = true;//SI existen coincidencias
+        int count_citas = 0;
+        for (Cita cita : citas) {
+            boolean doc_identificacion = cita.getDocumento().trim().equals(identificacion.trim());
+            LocalDateTime fecha_actual_cita = LocalDateTime.parse(( fecha_cita.trim()+" "+hora_cita.trim() ), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            LocalDateTime fecha_agendadas = LocalDateTime.parse(( cita.getFecha().trim()+" "+cita.getHora().trim() ), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+
+            boolean fecha_agenda= fecha_actual_cita.equals(fecha_agendadas);
+
+            if(!doc_identificacion || !fecha_agenda) count_citas++;
+
+        }
+        long cantidad_citas = citas.stream().count();
+        if(count_citas==cantidad_citas)
+            band = false;
+        return band;
+    }
+
+    public static Boolean validarCitasSimultaneasPorProfesional(String fecha_cita, String hora_cita,String tipo_medico, String especialista,  List<Cita> citas)
+    {
+        //si retorna FALSE es porque no tienen , TRUE ya tiene una cita y no pude repetir otra simultanea
+        boolean band = true;
+
+        int count_citas = 0;
         for (Cita cita : citas) {
 
-            boolean doc_identificacion = cita.getDocumento().trim().equals(identificacion.trim());
-//            boolean fecha_agendar_cita = cita.getFecha().trim().equals(fecha_cita.trim());
-//            boolean hora_agendar_cita = cita.getHora().trim().equals(hora_cita.trim());
-
             LocalDateTime fecha_actual_cita = LocalDateTime.parse(( fecha_cita.trim()+" "+hora_cita.trim() ), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-            LocalDateTime fecha_agendada = LocalDateTime.parse(( cita.getFecha().trim()+" "+cita.getHora().trim() ), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            LocalDateTime fecha_agendadas = LocalDateTime.parse(( cita.getFecha().trim()+" "+cita.getHora().trim() ), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            boolean fecha_agenda = fecha_actual_cita.equals(fecha_agendadas);
 
-            boolean tipo_medico_cita = cita.getTipo_cita().trim().equals(tipo_medico.trim());
-            boolean especialista_cita = cita.getEspecialidad().trim().equals(especialista.trim());
+            boolean medico_especialidad = (tipo_medico.trim()+especialista.trim()).equals( (cita.getTipo_cita().trim()+cita.getEspecialidad().trim()) );
 
+            if(!fecha_agenda && !medico_especialidad) count_citas++;
 
-//            if(doc_identificacion && (fecha_agendar_cita && hora_agendar_cita) && (tipo_medico_cita && especialista_cita))
-            if(!doc_identificacion && !fecha_actual_cita.isEqual(fecha_agendada)) {
-             //   System.out.println("INGRESO");
-                band = false;//NO existen coincidencias
-            }
         }
+        long cantidad_citas = citas.stream().count();
+        if(count_citas==cantidad_citas)
+            band = false;
 
         return band;
     }
