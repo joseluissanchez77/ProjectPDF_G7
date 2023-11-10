@@ -9,10 +9,7 @@ import org.citas_medidas.excepciones.MensageErrorException;
 import java.io.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.TextStyle;
@@ -280,20 +277,32 @@ public class Main {
 
                     }
 
-
-                    //Ningún profesional puede tener citas simultáneas
                     String tipo_cita = "";
                     String especialidad = "";
+
+                    //Las citas para especialistas deben agendarse con al menos 24h de anticipación.
+                    boolean validarCitaEspecialista24hAntes = false;
+                    if (parte.length >= 9) {
+                        tipo_cita = !validarFecha ? parte[1] : parte[2];
+
+                        LocalDateTime fecha_hora_cita = LocalDateTime.parse(( fecha_atc.trim()+" "+hora_cita.trim() ), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+
+                        //si retorna FALSE se lo puede agregar   TRUE no se lo pude agregar
+                        validarCitaEspecialista24hAntes = validarCitaEspecialista24hAntes(fecha_hora_cita,tipo_cita, tipoMedicoObj);
+                    }
+
+
+                    //Ningún profesional puede tener citas simultáneas
                     boolean validarCitasSimultaneasPorProfesional = false;
                     if (parte.length >= 9) {
                         tipo_cita = !validarFecha ? parte[1] : parte[2];
                         especialidad = !validarFecha ? parte[2] : parte[3];
-                        //si retorna FALSE se lo pruede agregar   TRUE no se lo peude agregar
+                        //si retorna TRUE se lo pruede agregar   FALSE no se lo puede agregar
                         validarCitasSimultaneasPorProfesional = validarCitasSimultaneasPorProfesional(fecha_atc, hora_cita,especialidad, doc_idententificacion, citas);
                     }
 
                     //System.out.println(validateFechaFeriado+ " "+validarHorariosConsultaMedica+ " "+validarRegistroCitasSoloFuturo+ " "+validarCitasSimultaneasServicios);
-                    if (parte.length >= 9 && validateFechaFeriado == false && validarHorariosConsultaMedica && validarRegistroCitasSoloFuturo && validarCitasSimultaneasServicios == false && validarCitasSimultaneasPorProfesional == false) {
+                    if (parte.length >= 9 && validateFechaFeriado == false && validarHorariosConsultaMedica && validarRegistroCitasSoloFuturo && validarCitasSimultaneasServicios == false && validarCitasSimultaneasPorProfesional == false && validarCitaEspecialista24hAntes) {
 
                         //System.out.println(doc_idententificacion);
                         String paciente = !validarFecha ? parte[3] : parte[4];
@@ -330,7 +339,7 @@ public class Main {
                         //Los días feriados no hay atención de ningún servicio.
                         //Las consultas médicas tienen los siguientes horarios
                         //Solo se pueden registrar citas en el futuro. validado con la fecha y hora actual
-                        if (validateFechaFeriado || !validarHorariosConsultaMedica || !validarRegistroCitasSoloFuturo || validarCitasSimultaneasServicios || validarCitasSimultaneasPorProfesional)
+                        if (validateFechaFeriado || !validarHorariosConsultaMedica || !validarRegistroCitasSoloFuturo || validarCitasSimultaneasServicios || validarCitasSimultaneasPorProfesional || !validarCitaEspecialista24hAntes)
                             citasNoCumplenRequerimientos.add(citaLinea);
 
                         citaActual = new Cita();
@@ -595,6 +604,26 @@ public class Main {
         long cantidad_citas = citas.stream().count();
         if(count_citas==cantidad_citas)
             band = false;
+
+        return band;
+    }
+
+
+    public static Boolean validarCitaEspecialista24hAntes(LocalDateTime fecha_hora, String especialista, TipoMedico tipo_medico){
+        //si retorna FALSE es porque la cita no esta 24 horas antes , TRUE si cumple las 24 horas minimo de anticipacion
+
+        boolean band = true;
+
+
+        DateTimeFormatter formato = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        LocalDateTime fecha_hora_actual = LocalDateTime.now();
+
+        // Calcular la duración en horas entre las fechas
+        Duration duracion = Duration.between(fecha_hora_actual, fecha_hora);
+        long horas_pasadas = duracion.toHours();
+
+        if(especialista.equals(tipo_medico.getGeneral())) band=true;
+        if(horas_pasadas<=24 && especialista.equals(tipo_medico.getEspecialista())) band =false;
 
         return band;
     }
