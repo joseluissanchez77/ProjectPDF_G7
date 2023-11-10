@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.citas_medidas.entidades.*;
 import org.citas_medidas.excepciones.MensageErrorException;
 
+import javax.swing.*;
 import java.io.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -238,7 +239,7 @@ public class Main {
                 }
 
                 // La cadena no está vacía CITAS NUEVAS ***
-                if (!(citaLinea == null) && !(citaLinea.isEmpty()) && nueva_cita) {
+                if (!(citaLinea == null) && !(citaLinea.isEmpty()) && nueva_cita && parte.length >=9) {
 
                     // validar que la fecha sea valida y sea diferente q la actual
                     if (esFechaValida(citaLinea, "yyyy-MM-dd") && fecha_actual != citaLinea) {
@@ -265,6 +266,28 @@ public class Main {
 
                     //validar que Solo se pueden registrar citas en el futuro.
                     boolean validarRegistroCitasSoloFuturo = validarRegistroCitasSoloFuturo(obtenerFechaActual(),obtenerHoraActual(),fecha_atc,hora_cita);
+
+                    //*Para el caso de menores de edad, se debe registrar un adulto apoderado con los
+                    // mismos datos que un paciente y los datos de contacto serán los del apoderado
+                    // en lugar de los datos del paciente
+                    //*Los apoderados deben ser mayores de edad
+                    String tipo_paciente = "";
+                    String fecha_nacimiento_paciente = "";
+                    String fecha_nacimiento_apoderado = "";
+                    boolean validarApoderadosPacientes = false;
+                    if (parte.length >= 9) {
+                        tipo_paciente = !validarFecha ? parte[4] : parte[5];
+                        fecha_nacimiento_paciente = !validarFecha ? parte[8] : parte[9];
+                        if(parte.length > 10){
+                            fecha_nacimiento_apoderado = !validarFecha ? parte[13] : parte[14];
+                        }
+                        //si retorna FALSE no puede registar si es TRUE si
+                        validarApoderadosPacientes = validarApoderadosPacientes(tipo_paciente, tipoPacienteObj, fecha_nacimiento_paciente,parte.length, fecha_nacimiento_apoderado);
+
+
+                    }
+
+
 
                     //Un paciente no puede tener citas simultáneas ni en el mismo servicio ni en distintos servicios
                     boolean validarCitasSimultaneasServicios = false;
@@ -301,12 +324,12 @@ public class Main {
                         validarCitasSimultaneasPorProfesional = validarCitasSimultaneasPorProfesional(fecha_atc, hora_cita,especialidad, doc_idententificacion, citas);
                     }
 
-                    //System.out.println(validateFechaFeriado+ " "+validarHorariosConsultaMedica+ " "+validarRegistroCitasSoloFuturo+ " "+validarCitasSimultaneasServicios);
-                    if (parte.length >= 9 && validateFechaFeriado == false && validarHorariosConsultaMedica && validarRegistroCitasSoloFuturo && validarCitasSimultaneasServicios == false && validarCitasSimultaneasPorProfesional == false && validarCitaEspecialista24hAntes) {
+                    //System.out.println(validateFechaFeriado+ " "+validarHorariosConsultaMedica+ " "+validarRegistroCitasSoloFuturo+ " "+validarCitasSimultaneasServicios + " "+ validarCitasSimultaneasPorProfesional+ " "+ validarCitaEspecialista24hAntes);
+                    if (parte.length >= 9 && validateFechaFeriado == false && validarHorariosConsultaMedica && validarRegistroCitasSoloFuturo && validarCitasSimultaneasServicios == false && validarCitasSimultaneasPorProfesional == false && validarCitaEspecialista24hAntes && validarApoderadosPacientes) {
 
                         //System.out.println(doc_idententificacion);
                         String paciente = !validarFecha ? parte[3] : parte[4];
-                        String tipo_paciente = !validarFecha ? parte[4] : parte[5];
+
 
 
                         citaActual.setFecha(fecha_atc);
@@ -318,14 +341,14 @@ public class Main {
                         citaActual.setTipo_documento(!validarFecha ? parte[5] : parte[6]);
                         citaActual.setDocumento(doc_idententificacion);
                         citaActual.setTelefono(!validarFecha ? parte[7] : parte[8]);
-                        citaActual.setFecha_nacimiento(!validarFecha ? parte[8] : parte[9]);
+                        citaActual.setFecha_nacimiento(fecha_nacimiento_paciente);
 
                         if (parte.length > 10) {
                             citaActual.setObservaciones(!validarFecha ? parte[9] : parte[10]);
                             citaActual.setResponsable(!validarFecha ? parte[10] : parte[11]);
                             citaActual.setTipo_documento_responsable(!validarFecha ? parte[11] : parte[12]);
                             citaActual.setDocumento_responsable(!validarFecha ? parte[12] : parte[13]);
-                            citaActual.setFecha_nacimiento_responsable(!validarFecha ? parte[13] : parte[14]);
+                            citaActual.setFecha_nacimiento_responsable(fecha_nacimiento_apoderado);
                         }
 
                         // Asegúrate de agregar la última cita después del bucle
@@ -339,7 +362,7 @@ public class Main {
                         //Los días feriados no hay atención de ningún servicio.
                         //Las consultas médicas tienen los siguientes horarios
                         //Solo se pueden registrar citas en el futuro. validado con la fecha y hora actual
-                        if (validateFechaFeriado || !validarHorariosConsultaMedica || !validarRegistroCitasSoloFuturo || validarCitasSimultaneasServicios || validarCitasSimultaneasPorProfesional || !validarCitaEspecialista24hAntes)
+                        if (validateFechaFeriado || !validarHorariosConsultaMedica || !validarRegistroCitasSoloFuturo || validarCitasSimultaneasServicios || validarCitasSimultaneasPorProfesional || !validarCitaEspecialista24hAntes || !validarApoderadosPacientes)
                             citasNoCumplenRequerimientos.add(citaLinea);
 
                         citaActual = new Cita();
@@ -487,7 +510,7 @@ public class Main {
 
     public static boolean validarHorariosConsultaMedica(String fecha_cita, String horaCita,
             List<Horarios> horariosList) {
-
+        //TRUE permite el registro FALSE no se registra
         boolean band = false; // cita fuera de rango
         // Convertir la hora de la cita en un objeto LocalTime
         LocalTime horaCitaLocalTime = LocalTime.parse(horaCita);
@@ -505,6 +528,7 @@ public class Main {
             LocalTime horaInicio = LocalTime.parse(horario.getHora_incio());
             LocalTime horaFin = LocalTime.parse(horario.getHora_fin());
 
+
             if ((horario.getDia().equals(nombreDia.toUpperCase()))
                     && (horaCitaLocalTime.equals(horaInicio) || horaCitaLocalTime.isAfter(horaInicio))
                     && (horaCitaLocalTime.equals(horaFin) || (horaCitaLocalTime.isBefore(horaFin)))) {
@@ -512,6 +536,7 @@ public class Main {
             }
 
         }
+
         return band;
 
     }
@@ -628,4 +653,38 @@ public class Main {
         return band;
     }
 
+    public static Boolean validarApoderadosPacientes(String tipo_paciente, TipoPaciente tipo_paciente_obj,String fecha_nacimiento_paciente, int cadena , String fecha_nacimiento_apoderado){
+        //si retorna TRUE se lo puede registra FALSE no se lo pude registar
+        boolean band = true;
+
+
+
+        int edad_paciente = calcularEdad(fecha_nacimiento_paciente);
+        int edad_apoderado = calcularEdad(fecha_nacimiento_apoderado);
+
+        if(tipo_paciente.trim().equals(tipo_paciente_obj.getMenor()) && cadena <= 10) band = false;
+
+        if(tipo_paciente.trim().equals(tipo_paciente_obj.getMenor()) && edad_paciente <=18 ) band = false;
+
+        if(tipo_paciente.trim().equals(tipo_paciente_obj.getMenor()) && edad_paciente <=18 && cadena>10) band = true;
+
+        if(tipo_paciente.trim().equals(tipo_paciente_obj.getAdulto()) && edad_paciente >=18) band = true;
+
+        if(edad_apoderado <=18 && cadena>10) band = false;
+
+        if(edad_apoderado >=18 && cadena>10) band = true;
+
+
+        return band;
+    }
+
+    public static int calcularEdad(String fecha_nacimiento){
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        // Calcular la edad
+        Period edad = Period.between(LocalDate.parse(fecha_nacimiento, formatter), LocalDate.now());
+
+        int edad_anios_paciente = edad.getYears();
+
+        return edad_anios_paciente;
+    }
 }
