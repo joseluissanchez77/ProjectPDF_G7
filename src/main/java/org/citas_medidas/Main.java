@@ -14,6 +14,7 @@ import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.TextStyle;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -302,13 +303,14 @@ public class Main {
 
                     String tipo_cita = "";
                     String especialidad = "";
+                    LocalDateTime fecha_hora_cita = null;
 
                     //Las citas para especialistas deben agendarse con al menos 24h de anticipación.
                     boolean validarCitaEspecialista24hAntes = false;
                     if (parte.length >= 9) {
                         tipo_cita = !validarFecha ? parte[1] : parte[2];
 
-                        LocalDateTime fecha_hora_cita = LocalDateTime.parse(( fecha_atc.trim()+" "+hora_cita.trim() ), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                        fecha_hora_cita = LocalDateTime.parse(( fecha_atc.trim()+" "+hora_cita.trim() ), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
 
                         //si retorna FALSE se lo puede agregar   TRUE no se lo pude agregar
                         validarCitaEspecialista24hAntes = validarCitaEspecialista24hAntes(fecha_hora_cita,tipo_cita, tipoMedicoObj);
@@ -324,8 +326,14 @@ public class Main {
                         validarCitasSimultaneasPorProfesional = validarCitasSimultaneasPorProfesional(fecha_atc, hora_cita,especialidad, doc_idententificacion, citas);
                     }
 
+                    //La última cita se puede hacer 20 minutos antes de la hora de cierre.
+                    //si retorna TRUE se pude agendar si retorna FALSE no
+
+                    boolean validarUltimaHoraCita = validarUltimaHoraCita(fecha_hora_cita, horariosList);
+
+
                     //System.out.println(validateFechaFeriado+ " "+validarHorariosConsultaMedica+ " "+validarRegistroCitasSoloFuturo+ " "+validarCitasSimultaneasServicios + " "+ validarCitasSimultaneasPorProfesional+ " "+ validarCitaEspecialista24hAntes);
-                    if (parte.length >= 9 && validateFechaFeriado == false && validarHorariosConsultaMedica && validarRegistroCitasSoloFuturo && validarCitasSimultaneasServicios == false && validarCitasSimultaneasPorProfesional == false && validarCitaEspecialista24hAntes && validarApoderadosPacientes) {
+                    if (parte.length >= 9 && validateFechaFeriado == false && validarHorariosConsultaMedica && validarRegistroCitasSoloFuturo && validarCitasSimultaneasServicios == false && validarCitasSimultaneasPorProfesional == false && validarCitaEspecialista24hAntes && validarApoderadosPacientes && validarUltimaHoraCita ) {
 
                         //System.out.println(doc_idententificacion);
                         String paciente = !validarFecha ? parte[3] : parte[4];
@@ -362,7 +370,7 @@ public class Main {
                         //Los días feriados no hay atención de ningún servicio.
                         //Las consultas médicas tienen los siguientes horarios
                         //Solo se pueden registrar citas en el futuro. validado con la fecha y hora actual
-                        if (validateFechaFeriado || !validarHorariosConsultaMedica || !validarRegistroCitasSoloFuturo || validarCitasSimultaneasServicios || validarCitasSimultaneasPorProfesional || !validarCitaEspecialista24hAntes || !validarApoderadosPacientes)
+                        if (validateFechaFeriado || !validarHorariosConsultaMedica || !validarRegistroCitasSoloFuturo || validarCitasSimultaneasServicios || validarCitasSimultaneasPorProfesional || !validarCitaEspecialista24hAntes || !validarApoderadosPacientes || !validarUltimaHoraCita)
                             citasNoCumplenRequerimientos.add(citaLinea);
 
                         citaActual = new Cita();
@@ -686,5 +694,27 @@ public class Main {
         int edad_anios_paciente = edad.getYears();
 
         return edad_anios_paciente;
+    }
+
+    public static boolean validarUltimaHoraCita(LocalDateTime fecha_hora_cita, List<Horarios> horariosList){
+        boolean band = false;
+
+
+        DateTimeFormatter fomato_hora = DateTimeFormatter.ofPattern("HH:mm");
+        String hora_cita = fecha_hora_cita.format(fomato_hora);
+        String dia_cita = fecha_hora_cita.getDayOfWeek().getDisplayName(TextStyle.FULL, new Locale("es", "ES")).toUpperCase().trim();
+
+
+        for (Horarios horario : horariosList) {
+
+            LocalTime horaFin = LocalTime.parse(horario.getHora_fin());
+            // Calcular la diferencia en minutos
+            long diferencia_minutos = ChronoUnit.MINUTES.between(LocalTime.parse( hora_cita) , horaFin);
+
+            if ( horario.getDia().equals(dia_cita.toUpperCase()) && diferencia_minutos >= 20)
+                band = true;// hora de cita fuera de rango
+
+        }
+        return band;
     }
 }
